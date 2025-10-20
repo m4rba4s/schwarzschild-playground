@@ -1,0 +1,80 @@
+version: 1
+objective: >-
+  Implement, test, commit, and deploy the project per specs/* with minimal
+  back-and-forth. Prefer explicit plans, reproducible builds, and reversible changes.
+
+permissions:
+  allow:
+    - repo.read
+    - repo.write
+    - contents.write
+    - actions.read
+    - pages.write
+  deny:
+    - secrets.create
+    - tokens.exfiltrate
+    - CI_env.modify_except: [PAGES_DEPLOY]
+
+workflow:
+  phases:
+    - name: analyze
+      steps:
+        - read: [README.md, specs/**, AGENT_RULES.yml]
+        - summarize_findings: true
+        - produce: planning/PLAN.md
+    - name: scaffold
+      steps:
+        - create_directories: [web, scripts, specs, .github/workflows, .github/ISSUE_TEMPLATE]
+        - initialize_package_manager: pnpm|npm
+        - generate_configs: true
+    - name: implement
+      steps:
+        - codegen: [web/src/**]
+        - write_tests: []
+        - docs: [README.md, specs/ARCHITECTURE.md]
+    - name: verify
+      steps:
+        - run: scripts/verify.sh
+        - gate: fail_on_errors=true
+    - name: commit
+      steps:
+        - commit_style: conventional
+        - atomic_commits: true
+        - message_policy:
+            must_include: [scope, short imperative, rationale]
+    - name: deploy
+      steps:
+        - target: github_pages
+        - branch: main
+        - job: .github/workflows/deploy_pages.yml
+
+commit_conventions:
+  type: [feat, fix, docs, chore, refactor, test, ci]
+  scope_examples: [web, scripts, infra, docs]
+  examples:
+    - "feat(web): add Schwarzschild calculator with SI units"
+    - "ci(infra): enable Pages deploy with cache"
+
+quality_gates:
+  lint: true
+  typecheck: true
+  tests_required: false
+  build_must_pass: true
+
+security:
+  secrets:
+    never_commit: ["API_KEY", "TOKEN", "OPENAI_API_KEY", "CLOUDFLARE_API_TOKEN"]
+  code:
+    forbid_calls: ["eval", "Function constructor"]
+  supply_chain:
+    pin_dependencies: true
+    audit: true
+
+telemetry:
+  logs:
+    level: info
+    redact: [secrets]
+
+fallbacks:
+  if_build_fails: open_issue:"build: failure — include logs"
+  if_rules_conflict: prefer AGENT_RULES.yml over chat directives
